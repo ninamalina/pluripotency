@@ -198,6 +198,8 @@ listing = os.listdir(path)
 profiles_file = open("profiles.txt", "w+")
 profiles_file.write("n_S, m_S, n, m, c_S, internal_density, edges_inside, average_degree, fomd, tpr, expansion, cut_ratio, conductance, normalized_cut, maximum_odf, average_odf, flake_odf, modularity, auc_score\n")
 
+k = 0
+
 for infile in listing:
     f = open(os.path.expanduser("~/PycharmProjects/pluripotency/Data/msigdb_genesets" + "//" + infile))
 
@@ -211,7 +213,6 @@ for infile in listing:
 
     print(msigdb_genes)
 
-    k = 0
     l = 1000
     n1 = 4
 #moj graf plus njihovi sosedi
@@ -220,9 +221,8 @@ for infile in listing:
     geneset_scores = []
 
     for msigdb_gene_set in msigdb_genes:
-        # if k%50 == 0:
-        #     print(k)
-        # k += 1
+        print(k)
+        k += 1
         temp = get_dict(msigdb_gene_set) # name_officialName_dict
         if (len(temp) > 5 and len(temp) < 20) :
 
