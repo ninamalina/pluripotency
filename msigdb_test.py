@@ -2,15 +2,12 @@ from collections import defaultdict
 from os.path import exists
 import pickle
 import networkx as nx
-import matplotlib.pylab as plt
 import numpy as np
-from sklearn import manifold
 from Data.get_names import get_dict
 import os
-from itertools import combinations
-import operator
-from math import e
 import random
+import time
+from sklearn import metrics
 
 __author__ = 'NinaHP'
 
@@ -39,15 +36,9 @@ def distance_matrix(genes): # pairwise jaccard similarity
 #
 # genes_with_gos = pickle.load(open('names_to_test.p', 'rb'))
 
-msigdb_genes = []
-f = open("c5.bp.v5.0.symbols.gmt.txt")
-for line in f:
-    splited = line.split("\t")[2:]
-    if len(splited) > 5 and len(splited) < 100:
-        msigdb_genes.append([a.strip() for a in splited])
 
 
-
+time0 = time.clock()
 interactor_name_dict = {}
 interactor_index_dict = {}
 
@@ -172,69 +163,250 @@ else:
 
 print("gene_neighbours_2 computed")
 
-# print combinations of n genes, orderd by jaccard similarity
-k = 0
+
 l = 1000
+n = 4
 
-scores = []
+four_random_scores= []
 
-for msigdb_gene_set in msigdb_genes:
-
-    temp = get_dict(msigdb_gene_set) # name_officialName_dict
-    if len(temp) <= 4:
-        continue
-    n = 4
-
-    four_real_scores = []
-    four_random_scores= []
-
-    for i in range(l):
-        four_real = random.sample(list(temp), n)
-        # print("four_real", four_real)
-
-        comb_num_dict = {}
-        s = set(gene_neighbours_2[name_interactor_dict[temp[four_real[0]]]])
-        u = set(gene_neighbours_2[name_interactor_dict[temp[four_real[0]]]])
-
-        for a in four_real:
-            s = s.intersection(set(gene_neighbours_2[name_interactor_dict[temp[a]]]))
-            u = u.union(set(gene_neighbours_2[name_interactor_dict[temp[a]]]))
-
+for i in range(l):
+    four_random = random.sample(list(name_interactor_dict), n)
+    s = set(gene_neighbours_2[name_interactor_dict[four_random[0]]])
+    u = set(gene_neighbours_2[name_interactor_dict[four_random[0]]])
+    for a in four_random:
+        s = s.intersection(set(gene_neighbours_2[name_interactor_dict[a]]))
+        u = u.union(set(gene_neighbours_2[name_interactor_dict[a]]))
+    if len(u) > 0 :
         m = len(s) / float(len(u))
-        four_real_scores.append(m)
-
-        four_random = random.sample(list(name_interactor_dict), n)
-        # print("four random:", four_random)
-        s = set(gene_neighbours_2[name_interactor_dict[four_random[0]]])
-        u = set(gene_neighbours_2[name_interactor_dict[four_random[0]]])
-        for a in four_random:
-            s = s.intersection(set(gene_neighbours_2[name_interactor_dict[a]]))
-            u = u.union(set(gene_neighbours_2[name_interactor_dict[a]]))
-        if len(u) > 0 :
-            m = len(s) / float(len(u))
-            four_random_scores.append(m)
+        four_random_scores.append(m)
 
 
-    four_real_scores = sorted(four_real_scores)
-    four_random_scores = sorted(four_random_scores)
-
-    scores.append(np.average(np.array([sum([1 for random1 in four_random_scores if real1 > random1]) for real1 in four_real_scores])) / l)
-
-    # plt.figure()
-    # plt.plot(range(len(four_real_scores)), four_real_scores, 'ro')
-    # plt.plot(range(len(four_random_scores)), four_random_scores, 'bo')
-    # plt.savefig("plot"+str(k)+".pdf")
-    # plt.close()
-
-    print(k)
-    # , "sum(four_real_scores):", sum(four_real_scores) / float(len(four_real_scores)), "\tsum(four_random_scores):", sum(four_random_scores) / float(len(four_real_scores)))
-    k += 1
+V = G.nodes()
+degrees  = sorted([G.degree(node) for node in V])
 
 
-plt.figure()
-plt.plot(range(len(scores)), sorted(scores), 'ro')
-plt.savefig("bf_scores.pdf")
-plt.close()
+if len(degrees) % 2 == 0:
+    d_m = (degrees[int(len(degrees) / 2)] + degrees[int(len(degrees) / 2 - 1)]) / 2.
+else:
+    d_m = degrees[int(len(degrees) / 2)]
+
+print("d_m:", d_m)
+
+path = 'Data/msigdb_genesets/'
+listing = os.listdir(path)
+
+profiles_file = open("profiles.txt", "w+")
+profiles_file.write("n_S, m_S, n, m, c_S, internal_density, edges_inside, average_degree, fomd, tpr, expansion, cut_ratio, conductance, normalized_cut, maximum_odf, average_odf, flake_odf, modularity, auc_score\n")
+
+for infile in listing:
+    f = open(os.path.expanduser("~/PycharmProjects/pluripotency/Data/msigdb_genesets" + "//" + infile))
+
+    print("current file is: " + infile)
+
+    msigdb_genes = []
+    for line in f:
+        splited = line.split("\t")[2:]
+        if len(splited) > 5:
+            msigdb_genes.append([a.strip() for a in splited])
+
+    print(msigdb_genes)
+
+    k = 0
+    l = 1000
+    n1 = 4
+#moj graf plus njihovi sosedi
+
+
+    geneset_scores = []
+
+    for msigdb_gene_set in msigdb_genes:
+        # if k%50 == 0:
+        #     print(k)
+        # k += 1
+        temp = get_dict(msigdb_gene_set) # name_officialName_dict
+        if (len(temp) > 5 and len(temp) < 20) :
+
+            s = list(set([name_interactor_dict[name] for name in list(temp) if name in name_interactor_dict.keys()]))
+            s_with_neighbours = list(set([item for sublist in [gene_neighbours[interactor] for interactor in s if interactor in gene_neighbours.keys()] for item in sublist])) + s
+
+            S_graph = G.subgraph(s)
+            S_plus_graph = G.subgraph(s_with_neighbours)
+
+            n_S = float(S_graph.number_of_nodes())
+            m_S = float(S_graph.number_of_edges())
+            n = float(G.number_of_nodes())
+            m = float(G.number_of_edges())
+
+            c_S = 0
+            for (u,v) in S_plus_graph.edges():
+                if (u in S_graph.nodes() and v not in S_graph.nodes()) or (u not in S_graph.nodes() and v in S_graph.nodes()):
+                   c_S += 1
+
+            # if (c_S == 0):
+            #     print(S_graph.number_of_edges(), S_plus_graph.number_of_edges())
+            #     print(S_graph.nodes())
+            #     print("S plus nodes", S_plus_graph.nodes())
+            #     print("S plus edges", S_plus_graph.edges())
+            #     print("*", [(interactor, gene_neighbours[interactor]) for interactor in s if interactor in gene_neighbours.keys()])
+            #     # c_S = 0
+            #     # for (u,v) in S_plus_graph.edges():
+            #     #     print(u, v)
+            #     #     if (u in S_graph.nodes() and v not in S_graph.nodes()) or (u not in S_graph.nodes() and v in S_graph.nodes()):
+            #     #         c_S += 1
+
+
+            internal_density = 2 * m_S / (n_S * (n_S - 1))
+
+            edges_inside = m_S
+
+            average_degree = 2 * m_S / n_S
+
+
+            fomd = sum(np.array([1 for node in S_graph.nodes() if S_graph.degree(node) > d_m])) / n_S
+
+            tpr = 0
+
+            for u in S_graph.nodes():
+                u_count = 0
+                for (v, w) in S_graph.edges():
+                    if (u,v) in S_graph.edges() and (u,w) in S_graph.edges():
+                        u_count += 1
+                if u_count > 0:
+                    tpr += 1
+            tpr = tpr / n_S
+
+            expansion = c_S / n_S
+
+            cut_ratio = c_S / (n_S * (n - n_S))
+
+            if (2 * m_S + c_S) > 0 :
+                conductance = c_S / (2 * m_S + c_S)
+            else:
+                conductance = 0.0
+
+            normalized_cut = conductance + c_S / (2 * (m - m_S) + c_S)
+
+
+            odfs = [sum(np.array([1 for edge in S_plus_graph.edges(node) if edge not in S_graph.edges(node)])) / S_plus_graph.degree(node) for node in S_graph.nodes() if S_plus_graph.degree(node) !={} and S_plus_graph.degree(node) != 0]
+
+
+            maximum_odf = 0.0
+            average_odf = 0.0
+
+            if len(odfs) > 0 :
+                maximum_odf = max(odfs)
+                average_odf = np.average(np.array(odfs))
+
+            flake_odf = sum([1 for node in S_graph.nodes() if S_plus_graph.degree(node) != {} and S_graph.number_of_edges(node) < S_plus_graph.degree(node) / 2]) / n_S
+
+
+            # modularity =
+
+            degrees = []
+            for node in S_graph.nodes():
+                degree = 0
+                if S_plus_graph.degree(node) != {}:
+                    degree = S_plus_graph.degree(node)
+                degrees.append(degree)
+
+
+
+            # print("n_S:", n_S)
+            # print("m_S:", m_S)
+            # print("n:", n)
+            # print("m:", m)
+            # print("c_S:", c_S)
+            # print("internal_density:", internal_density)
+            # print("edges_inside:", edges_inside)
+            # print("average_degree:", average_degree)
+            # print("fomd:", fomd)
+            # print("tpr:", tpr)
+            # print("expansion:", expansion)
+            # print("cut_ratio:", cut_ratio)
+            # print("conductance:", conductance)
+            # print("normalized_cut:", normalized_cut)
+            # print("maximum_odf:", maximum_odf)
+            # print("average_odf:", average_odf)
+            # print("flake_odf:", flake_odf)
+
+
+
+            #upostevas tud sosede ampak une povezave k majo sosedi vn, ne upostevas
+            degrees_neighbours = []
+
+            for u in S_plus_graph.nodes():
+                if u not in S_graph.nodes():
+                    d = 0
+                    for (u,v) in S_plus_graph.edges(u):
+                        if v in S_graph.nodes() or u in S_graph.nodes():
+                            d += 1
+                    if d > 0:
+                        degrees_neighbours.append(d)
+            # print(sum(degrees_neighbours))
+            # print(degrees)
+            # print(degrees_neighbours)
+            a = []
+            for i in range(100):
+                rg = nx.configuration_model(degrees + degrees_neighbours, create_using=None, seed=None)
+                a.append(rg.subgraph(range(len(degrees))).number_of_edges())
+            e_m = sum(a) / 100.
+
+            modularity = (m_S - e_m) / 4.
+
+
+            four_real_scores = []
+
+            for i in range(l):
+                four_real = random.sample(list(temp), n1)
+
+                comb_num_dict = {}
+                s = set(gene_neighbours_2[name_interactor_dict[temp[four_real[0]]]])
+                u = set(gene_neighbours_2[name_interactor_dict[temp[four_real[0]]]])
+
+                for a in four_real:
+                    s = s.intersection(set(gene_neighbours_2[name_interactor_dict[temp[a]]]))
+                    u = u.union(set(gene_neighbours_2[name_interactor_dict[temp[a]]]))
+
+                # if(c_S == 0):
+                #     print(s, u)
+
+                if len(u) > 0:
+                    jc_score = len(s) / float(len(u))
+                    four_real_scores.append(jc_score)
+
+
+            if(c_S == 0):
+                print("c_s = 0, four_real_scores = ", four_real_scores)
+
+
+            y = np.array([0]*len(four_random_scores) + [1]*len(four_real_scores))
+            pred = np.array(four_random_scores + four_real_scores)
+            fpr, tspr, thresholds = metrics.roc_curve(y, pred, pos_label=1)
+            auc_score = metrics.auc(fpr, tspr)
+            geneset_scores.append(auc_score)
+
+            profile = [str(x) for x in [n_S, m_S, n, m, c_S, internal_density, edges_inside, average_degree, fomd, tpr, expansion, cut_ratio, conductance, normalized_cut, maximum_odf, average_odf, flake_odf, modularity, auc_score]]
+            s = ",".join(profile) + "\n"
+            profiles_file.write(s)
+profiles_file.close()
+print("time in minutes: ", (time.clock() - time0) / 60)
+    #
+    # print(geneset_scores)
+    # print(len(geneset_scores))
+    # print(np.array(geneset_scores).mean())
+
+
+
+
+
+
+
+
+
+# plt.figure()
+# plt.plot(range(len(scores)), sorted(scores), 'ro')
+# plt.savefig("bf_scores.pdf")
+# plt.close()
 
 
 # dm = distance_matrix([key for key in temp if key in simon])
